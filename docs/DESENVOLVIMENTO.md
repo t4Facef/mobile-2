@@ -20,24 +20,24 @@ A View nunca chama um Service diretamente. Ela fala só com o ViewModel, que coo
 
 ### Estrutura de pastas
 
+> Cada pasta em `lib/` tem um arquivo placeholder com um comentário explicando o que aquela camada faz e como ela se conecta à arquitetura. São ponto de partida — os arquivos reais vão sendo criados na mesma pasta conforme a implementação avança.
+
 ```
 lib/
 ├── main.dart
-├── models/              # Dados puros, sem lógica
-│   └── delivery.dart
-├── services/            # Acesso a sistemas externos (GPS, IA, mapas)
-│   ├── ai_service.dart
-│   └── location_service.dart
-├── viewmodels/          # Estado + lógica de negócio
-│   └── delivery_viewmodel.dart
-├── views/               # Telas
-│   ├── home/
-│   │   └── home_view.dart
-│   └── map/
-│       └── map_view.dart
-└── widgets/             # Componentes reutilizáveis entre telas
-    └── delivery_card.dart
+├── models/
+│   └── example_model.dart      # placeholder
+├── services/
+│   └── example_service.dart    # placeholder
+├── viewmodels/
+│   └── example_viewmodel.dart  # placeholder
+├── views/
+│   └── example_view.dart       # placeholder
+└── widgets/
+    └── example_widget.dart     # placeholder
 ```
+
+Cada pasta tem um arquivo `example_*.dart` com um comentário explicando o papel daquela camada e como ela se conecta às outras. Ao implementar, crie os arquivos reais na mesma pasta — os placeholders podem ser deletados quando não forem mais necessários como referência.
 
 ---
 
@@ -83,12 +83,18 @@ lib/
 ### Estrutura de branches
 
 ```
-main                              ← código estável, o que vai pra apresentação
-├── feature/base-mvvm             ← estrutura de pastas + models + navegação
-├── feature/delivery-list         ← HomeView + DeliveryViewModel
-├── feature/map-geolocation       ← MapView + LocationService
-├── feature/ai-integration        ← AiService + ordenação inteligente
-└── fix/nome-do-bug               ← correções pontuais
+main                        ← código estável, o que vai pra apresentação
+├── nome-da-feature ← desenvolvimento de funcionalidades
+└── fix/nome-do-bug         ← correções pontuais
+```
+
+O nome da branch deve descrever o que está sendo feito. Exemplos:
+
+```bash
+delivery-list       # tela de lista de entregas
+map-geolocation     # mapa + localização
+ai-integration      # integração com a API de IA
+gps-permission-crash    # correção de bug específico
 ```
 
 Não commitar direto na `main`. Cada feature tem sua branch, e só entra na `main` depois de um colega revisar.
