@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_2_bim/views/map_view.dart';
 
 void main() {
   runApp(const MyApp());
@@ -10,9 +11,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'RouteAI',
-      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple)),
-      home: const Scaffold(body: Center(child: Text('RouteAI'))),
+      home: const MapView(),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Color(0xFFEA1D2C)),
+      ),
     );
   }
 }
