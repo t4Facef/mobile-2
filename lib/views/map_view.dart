@@ -92,8 +92,8 @@ class _MapViewState extends State<MapView> {
       floatingActionButton: _currentLocation != null
           ? FloatingActionButton(
               onPressed: () => _mapController.move(_currentLocation!, 16),
-              child: const Icon(Icons.my_location),
               shape: CircleBorder(),
+              child: const Icon(Icons.my_location),
             )
           : null,
       body: _isLoading
