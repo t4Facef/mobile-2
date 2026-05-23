@@ -78,11 +78,74 @@ class _MapViewState extends State<MapView> {
     }
   }
 
+  Future<void> _refreshLocation() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+    await _getCurrentLocation();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return const AppShell(body: Column(children: [
-          
-        ],
-      ));
+    return AppShell(
+      floatingActionButton: _currentLocation != null
+          ? FloatingActionButton(
+              onPressed: () => _mapController.move(_currentLocation!, 16),
+              child: const Icon(Icons.my_location),
+              shape: CircleBorder(),
+            )
+          : null,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage.isNotEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(_errorMessage),
+                  SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _refreshLocation,
+                    child: const Text('Tente Novamente'),
+                  ),
+                ],
+              ),
+            )
+          : FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _currentLocation!,
+                initialZoom: 16,
+                onMapReady: () {
+                  setState(() {
+                    _mapInitialized = true;
+                  });
+                  _mapController.move(_currentLocation!, 16);
+                },
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                  userAgentPackageName: 'com.example.mobile_2_bim',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: _currentLocation!,
+                      width: 50,
+                      height: 50,
+                      child: const Icon(
+                        Icons.location_pin,
+                        size: 50,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+    );
   }
 }

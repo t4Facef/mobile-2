@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 
 class AppShell extends StatefulWidget {
   final Widget body;
+  final Widget? floatingActionButton;
 
-  const AppShell({super.key, required this.body});
+  const AppShell({
+    super.key,
+    required this.body,
+    this.floatingActionButton,
+  });
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -32,6 +37,7 @@ class _AppShellState extends State<AppShell> {
         ),
       ),
       body: widget.body,
+      floatingActionButton: widget.floatingActionButton,
       bottomNavigationBar: SafeArea(
         child: Container(
           decoration: BoxDecoration(
