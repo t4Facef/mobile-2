@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local configuration (API keys, SDK paths — nunca commitar)
+**/android/local.properties
