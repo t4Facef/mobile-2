@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mobile_2_bim/widgets/app_shell.dart';
 
 class MapView extends StatefulWidget {
@@ -12,11 +11,11 @@ class MapView extends StatefulWidget {
 }
 
 class _MapViewState extends State<MapView> {
-  final MapController _mapController = MapController();
+  GoogleMapController? _mapController;
   LatLng? _currentLocation;
+  Set<Marker> _markers = {};
   bool _isLoading = true;
   String _errorMessage = '';
-  bool _mapInitialized = false;
 
   @override
   void initState() {
@@ -24,12 +23,15 @@ class _MapViewState extends State<MapView> {
     _getCurrentLocation();
   }
 
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
   Future<void> _getCurrentLocation() async {
     try {
-      bool serviceEnabled;
-      LocationPermission permission;
-
-      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         setState(() {
           _errorMessage = 'Serviço de localização desabilitado';
@@ -38,7 +40,7 @@ class _MapViewState extends State<MapView> {
         return;
       }
 
-      permission = await Geolocator.checkPermission();
+      LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
@@ -53,23 +55,34 @@ class _MapViewState extends State<MapView> {
       if (permission == LocationPermission.deniedForever) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Permissão de localização negada permanentemente';
+          _errorMessage = 'Permissão negada permanentemente';
         });
         return;
       }
 
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+        ),
       );
 
+      final location = LatLng(position.latitude, position.longitude);
+
       setState(() {
-        _currentLocation = LatLng(position.latitude, position.longitude);
+        _currentLocation = location;
         _isLoading = false;
+        _markers = {
+          Marker(
+            markerId: const MarkerId('current'),
+            position: location,
+            infoWindow: const InfoWindow(title: 'Você está aqui'),
+          ),
+        };
       });
 
-      if (_mapInitialized) {
-        _mapController.move(_currentLocation!, 16);
-      }
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(location, 15),
+      );
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -78,74 +91,49 @@ class _MapViewState extends State<MapView> {
     }
   }
 
-  Future<void> _refreshLocation() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
-    await _getCurrentLocation();
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppShell(
-      floatingActionButton: _currentLocation != null
-          ? FloatingActionButton(
-              onPressed: () => _mapController.move(_currentLocation!, 16),
-              shape: CircleBorder(),
-              child: const Icon(Icons.my_location),
-            )
-          : null,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage.isNotEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(_errorMessage),
-                  SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _refreshLocation,
-                    child: const Text('Tente Novamente'),
-                  ),
-                ],
-              ),
-            )
-          : FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _currentLocation!,
-                initialZoom: 16,
-                onMapReady: () {
-                  setState(() {
-                    _mapInitialized = true;
-                  });
-                  _mapController.move(_currentLocation!, 16);
-                },
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate:
-                      "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                  userAgentPackageName: 'com.example.mobile_2_bim',
-                ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _currentLocation!,
-                      width: 50,
-                      height: 50,
-                      child: const Icon(
-                        Icons.location_pin,
-                        size: 50,
-                        color: Colors.red,
-                      ),
+      floatingActionButton:
+          _currentLocation != null
+              ? FloatingActionButton(
+                shape: const CircleBorder(),
+                onPressed:
+                    () => _mapController?.animateCamera(
+                      CameraUpdate.newLatLngZoom(_currentLocation!, 15),
+                    ),
+                child: const Icon(Icons.my_location),
+              )
+              : null,
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage.isNotEmpty
+              ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(_errorMessage),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: _getCurrentLocation,
+                      child: const Text('Tente Novamente'),
                     ),
                   ],
                 ),
-              ],
-            ),
+              )
+              : GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: _currentLocation!,
+                  zoom: 15,
+                ),
+                onMapCreated: (controller) => _mapController = controller,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
+                mapToolbarEnabled: false,
+                markers: _markers,
+              ),
     );
   }
 }

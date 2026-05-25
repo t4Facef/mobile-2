@@ -46,3 +46,4 @@ app.*.map.json
 
 # Local configuration (API keys, SDK paths — nunca commitar)
 **/android/local.properties
+lib/core/secrets.dart
