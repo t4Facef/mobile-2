@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:mobile_2_bim/widgets/app_shell.dart';
 
 class MapView extends StatefulWidget {
   const MapView({super.key});
@@ -93,47 +92,53 @@ class _MapViewState extends State<MapView> {
 
   @override
   Widget build(BuildContext context) {
-    return AppShell(
-      floatingActionButton:
-          _currentLocation != null
-              ? FloatingActionButton(
-                shape: const CircleBorder(),
-                onPressed:
-                    () => _mapController?.animateCamera(
-                      CameraUpdate.newLatLngZoom(_currentLocation!, 15),
-                    ),
-                child: const Icon(Icons.my_location),
-              )
-              : null,
-      body:
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _errorMessage.isNotEmpty
-              ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(_errorMessage),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: _getCurrentLocation,
-                      child: const Text('Tente Novamente'),
-                    ),
-                  ],
-                ),
-              )
-              : GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: _currentLocation!,
-                  zoom: 15,
-                ),
-                onMapCreated: (controller) => _mapController = controller,
-                myLocationEnabled: true,
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: false,
-                mapToolbarEnabled: false,
-                markers: _markers,
-              ),
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_errorMessage),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _getCurrentLocation,
+              child: const Text('Tente Novamente'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // FAB fica dentro da página como Stack, pois o Scaffold está no AppShell
+    return Stack(
+      children: [
+        GoogleMap(
+          initialCameraPosition: CameraPosition(
+            target: _currentLocation!,
+            zoom: 15,
+          ),
+          onMapCreated: (controller) => _mapController = controller,
+          myLocationEnabled: true,
+          myLocationButtonEnabled: false,
+          zoomControlsEnabled: false,
+          mapToolbarEnabled: false,
+          markers: _markers,
+        ),
+        Positioned(
+          bottom: 16,
+          right: 16,
+          child: FloatingActionButton(
+            shape: const CircleBorder(),
+            onPressed: () => _mapController?.animateCamera(
+              CameraUpdate.newLatLngZoom(_currentLocation!, 15),
+            ),
+            child: const Icon(Icons.my_location),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_2_bim/views/map_view.dart';
+import 'package:mobile_2_bim/widgets/app_shell.dart';
 
 class SplashscreenView extends StatefulWidget {
   const SplashscreenView({super.key});
@@ -16,7 +16,7 @@ class _SplashscreenViewState extends State<SplashscreenView> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => MapView()),
+          MaterialPageRoute(builder: (_) => const AppShell()),
         );
       }
     });
