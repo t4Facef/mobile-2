@@ -12,7 +12,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [MapView(), DeliveryView()];
+  final List<Widget> _pages = const [DeliveryView(), MapView()];
 
   @override
   Widget build(BuildContext context) {
@@ -54,15 +54,15 @@ class _AppShellState extends State<AppShell> {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _NavItem(
-                icon: Icons.map_outlined,
-                label: 'Rota',
+                icon: Icons.list_alt,
+                label: 'Entregas',
                 isSelected: _currentIndex == 0,
                 selectedColor: themeColors.primary,
                 onTap: () => setState(() => _currentIndex = 0),
               ),
               _NavItem(
-                icon: Icons.list_alt,
-                label: 'Entregas',
+                icon: Icons.map_outlined,
+                label: 'Rota',
                 isSelected: _currentIndex == 1,
                 selectedColor: themeColors.primary,
                 onTap: () => setState(() => _currentIndex = 1),
