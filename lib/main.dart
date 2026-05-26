@@ -18,7 +18,6 @@ class MyApp extends StatelessWidget {
       title: 'RouteAI',
       home: const SplashscreenView(),
       theme: theme.light(),
-      darkTheme: theme.dark(),
       themeMode: ThemeMode.system,
     );
   }
