@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-
-class _Stop {
-  final String address;
-  final String complement;
-  _Stop({required this.address, required this.complement});
-}
+import '../models/stop_model.dart';
+import '../services/claude_service.dart' show GeminiService;
+import '../services/route_service.dart';
 
 class DeliveryView extends StatefulWidget {
   const DeliveryView({super.key});
@@ -15,16 +12,18 @@ class DeliveryView extends StatefulWidget {
 
 class _DeliveryViewState extends State<DeliveryView> {
   bool _isListMode = true;
+  bool _isLoading = false;
+  bool _isOptimized = false;
 
   final TextEditingController _listController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _numberController = TextEditingController();
   final TextEditingController _complementController = TextEditingController();
 
-  final List<_Stop> _stops = [
-    _Stop(address: 'Rua Augusta, 1508', complement: 'Apto 42 · Bloco A'),
-    _Stop(address: 'Av. Brigadeiro Faria Lima, 3477', complement: 'Torre Sul · Recepção'),
-    _Stop(address: 'Alameda Santos, 2224', complement: 'Loja 05 · Portaria'),
+  final List<Stop> _stops = [
+    Stop(address: 'Rua Augusta, 1508', complement: 'Apto 42 · Bloco A'),
+    Stop(address: 'Av. Brigadeiro Faria Lima, 3477', complement: 'Torre Sul · Recepção'),
+    Stop(address: 'Alameda Santos, 2224', complement: 'Loja 05 · Portaria'),
   ];
 
   void _addStop() {
@@ -35,17 +34,78 @@ class _DeliveryViewState extends State<DeliveryView> {
     final full = number.isEmpty ? address : '$address, $number';
 
     setState(() {
-      _stops.add(_Stop(
-        address: full,
-        complement: _complementController.text.trim(),
-      ));
+      _stops.add(Stop(address: full, complement: _complementController.text.trim()));
+      _isOptimized = false;
       _addressController.clear();
       _numberController.clear();
       _complementController.clear();
     });
   }
 
-  void _removeStop(int index) => setState(() => _stops.removeAt(index));
+  void _removeStop(int index) => setState(() {
+        _stops.removeAt(index);
+        _isOptimized = false;
+      });
+
+  Future<void> _optimizeFromList() async {
+    final text = _listController.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final parsed = await GeminiService().parseDeliveryList(text);
+      if (parsed.isEmpty) throw Exception('Nenhum endereço encontrado no texto.');
+
+      final optimized = await RouteService().optimizeRoute(parsed);
+
+      setState(() {
+        _stops
+          ..clear()
+          ..addAll(optimized);
+        _isListMode = false;
+        _isOptimized = true;
+        _listController.clear();
+      });
+
+      _showSnack('IA otimizou ${optimized.length} paradas com sucesso!', isError: false);
+    } catch (e) {
+      _showSnack('Erro: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _optimizeManual() async {
+    if (_stops.length < 2) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final optimized = await RouteService().optimizeRoute(_stops);
+      setState(() {
+        _stops
+          ..clear()
+          ..addAll(optimized);
+        _isOptimized = true;
+      });
+      _showSnack('Rota otimizada para ${optimized.length} paradas!', isError: false);
+    } catch (e) {
+      _showSnack('Erro ao otimizar rota: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSnack(String message, {bool isError = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red[700] : Colors.green[700],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -79,8 +139,29 @@ class _DeliveryViewState extends State<DeliveryView> {
           const SizedBox(height: 16),
           _buildToggle(colors),
           const SizedBox(height: 16),
-          _isListMode ? _buildListMode(colors) : _buildManualMode(colors),
+          if (_isLoading)
+            _buildLoadingIndicator(colors)
+          else
+            _isListMode ? _buildListMode(colors) : _buildManualMode(colors),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator(ColorScheme colors) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48),
+        child: Column(
+          children: [
+            CircularProgressIndicator(color: colors.primary),
+            const SizedBox(height: 16),
+            Text(
+              'IA processando sua rota...',
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -127,42 +208,42 @@ class _DeliveryViewState extends State<DeliveryView> {
   Widget _buildListMode(ColorScheme colors) {
     return Column(
       children: [
-        Stack(
-          children: [
-            TextField(
-              controller: _listController,
-              maxLines: 5,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText:
-                    'Ex: Av. Doutor Hélio Palermo 1200 - Sorvete, para as 20:00\nRua General Osório 150 - Pizza entrega as 21:00...',
-                hintStyle: TextStyle(color: Colors.grey[450] ?? Colors.grey, fontSize: 15),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide(
-                    width: 0.5,
-                    color: colors.primary,
-                    style: BorderStyle.none,
-                  ),
-                ),
-                contentPadding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
-              ),
+        TextField(
+          controller: _listController,
+          maxLines: 6,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            hintText:
+                'Ex: Av. Doutor Hélio Palermo 1200 - Sorvete, para as 20:00\nRua General Osório 150 - Pizza entrega as 21:00...',
+            hintStyle: TextStyle(color: Colors.grey[450] ?? Colors.grey, fontSize: 13),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
             ),
-
-          ],
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide(color: colors.primary, width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          ),
         ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.navigation_rounded, color: Colors.white),
+            onPressed: _listController.text.trim().isEmpty ? null : _optimizeFromList,
+            icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
             label: const Text(
-              'Otimizar Rota',
+              'Otimizar com IA',
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: colors.primary,
+              disabledBackgroundColor: Colors.grey[300],
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               elevation: 0,
@@ -171,7 +252,7 @@ class _DeliveryViewState extends State<DeliveryView> {
         ),
         const SizedBox(height: 8),
         Text(
-          'A IA selecionará o trajeto mais rápido para suas entregas.',
+          'A IA extrai os endereços e seleciona o trajeto mais rápido.',
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.grey[500], fontSize: 12),
         ),
@@ -183,9 +264,35 @@ class _DeliveryViewState extends State<DeliveryView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Paradas (${_stops.length})',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        Row(
+          children: [
+            Text(
+              'Paradas (${_stops.length})',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            if (_isOptimized) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.auto_awesome_rounded, size: 12, color: Colors.green[700]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Otimizada pela IA',
+                      style: TextStyle(fontSize: 11, color: Colors.green[700], fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 12),
         if (_stops.isEmpty)
@@ -203,14 +310,20 @@ class _DeliveryViewState extends State<DeliveryView> {
         const SizedBox(height: 8),
         SizedBox(
           width: double.infinity,
-          child: OutlinedButton(
-            onPressed: _stops.isEmpty ? null : () {},
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              side: BorderSide(color: Colors.grey[300]!),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ElevatedButton.icon(
+            onPressed: _stops.length >= 2 ? _optimizeManual : null,
+            icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
+            label: const Text(
+              'Otimizar Rota',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
             ),
-            child: const Text('Otimizar Rota', style: TextStyle(fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colors.primary,
+              disabledBackgroundColor: Colors.grey[300],
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              elevation: 0,
+            ),
           ),
         ),
         const SizedBox(height: 24),
@@ -264,9 +377,9 @@ class _DeliveryViewState extends State<DeliveryView> {
         children: [
           Container(
             width: 4,
-            height: 60,
+            height: 72,
             decoration: BoxDecoration(
-              color: colors.primary,
+              color: _isOptimized ? Colors.green : colors.primary,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(10),
                 bottomLeft: Radius.circular(10),
@@ -289,19 +402,43 @@ class _DeliveryViewState extends State<DeliveryView> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  stop.address,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-                if (stop.complement.isNotEmpty)
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    stop.complement,
-                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    stop.address,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
-              ],
+                  if (stop.complement.isNotEmpty)
+                    Text(
+                      stop.complement,
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
+                  if (stop.note != null || stop.time != null)
+                    const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      if (stop.note != null)
+                        Flexible(
+                          child: Text(
+                            stop.note!,
+                            style: TextStyle(color: Colors.blue[400], fontSize: 11),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      if (stop.note != null && stop.time != null)
+                        Text('  ·  ', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                      if (stop.time != null)
+                        Text(
+                          stop.time!,
+                          style: TextStyle(color: Colors.orange[600], fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           IconButton(

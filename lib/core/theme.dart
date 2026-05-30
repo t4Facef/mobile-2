@@ -229,7 +229,7 @@ class MaterialTheme {
      textTheme: GoogleFonts.hankenGroteskTextTheme(
        ThemeData(colorScheme: colorScheme).textTheme,
      ),
-     scaffoldBackgroundColor: colorScheme.background,
+     scaffoldBackgroundColor: colorScheme.surface,
      canvasColor: colorScheme.surface,
   );
 
