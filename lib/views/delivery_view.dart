@@ -78,7 +78,7 @@ class _DeliveryViewState extends State<DeliveryView> {
       final result = await RouteService().optimizeRoute(parsed, userOrigin: userOrigin);
 
       setState(() {
-        _stops = [...result.stops, ...result.infeasible];
+        _stops = List.of(result.stops);
         _isListMode = false;
         _isOptimized = true;
         _listController.clear();
@@ -104,7 +104,7 @@ class _DeliveryViewState extends State<DeliveryView> {
       setState(() => _loadingStep = 2);
       final result = await RouteService().optimizeRoute(_stops, userOrigin: userOrigin);
       setState(() {
-        _stops = [...result.stops, ...result.infeasible];
+        _stops = List.of(result.stops);
         _isOptimized = true;
       });
       widget.onRouteOptimized?.call(result);
@@ -310,7 +310,7 @@ class _DeliveryViewState extends State<DeliveryView> {
               Icon(Icons.lightbulb_outline_rounded, size: 16, color: colors.primary),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('Como usar este modo?',
+                child: Text('Como usar o modo Via IA?',
                     style: TextStyle(fontSize: 13, color: colors.primary, fontWeight: FontWeight.w600)),
               ),
               Icon(_showTip ? Icons.expand_less : Icons.expand_more, size: 18, color: colors.primary),
@@ -330,9 +330,9 @@ class _DeliveryViewState extends State<DeliveryView> {
               Text('Cole sua lista de entregas em texto livre. A IA identifica:',
                   style: TextStyle(fontSize: 12, color: Colors.grey[700])),
               const SizedBox(height: 8),
-              _tipItem('📍', 'Endereço e número'),
-              _tipItem('🍕', 'Produto ou observação'),
-              _tipItem('🕐', 'Horário de entrega'),
+              _tipItem('Endereço e número'),
+              _tipItem('Produto ou observação'),
+              _tipItem('Horário de entrega'),
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.all(10),
@@ -413,11 +413,11 @@ class _DeliveryViewState extends State<DeliveryView> {
     );
   }
 
-  Widget _tipItem(String emoji, String text) {
+  Widget _tipItem(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(children: [
-        Text(emoji, style: const TextStyle(fontSize: 13)),
+        Icon(Icons.check_circle_outline_rounded, size: 13, color: Colors.grey[500]),
         const SizedBox(width: 8),
         Text(text, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
       ]),
