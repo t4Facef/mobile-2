@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../models/route_result.dart';
 import '../models/stop_model.dart';
-import '../services/claude_service.dart' show GeminiService;
+import '../services/gemini_service.dart';
 import '../services/route_service.dart';
 
 class DeliveryView extends StatefulWidget {
-  const DeliveryView({super.key});
+  final void Function(RouteResult)? onRouteOptimized;
+
+  const DeliveryView({super.key, this.onRouteOptimized});
 
   @override
   State<DeliveryView> createState() => _DeliveryViewState();
@@ -25,6 +30,25 @@ class _DeliveryViewState extends State<DeliveryView> {
     Stop(address: 'Av. Brigadeiro Faria Lima, 3477', complement: 'Torre Sul · Recepção'),
     Stop(address: 'Alameda Santos, 2224', complement: 'Loja 05 · Portaria'),
   ];
+
+  Future<LatLng?> _getUserLocation() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) { return null; }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) { return null; }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      return LatLng(pos.latitude, pos.longitude);
+    } catch (_) {
+      return null;
+    }
+  }
 
   void _addStop() {
     final address = _addressController.text.trim();
@@ -53,21 +77,32 @@ class _DeliveryViewState extends State<DeliveryView> {
 
     setState(() => _isLoading = true);
     try {
-      final parsed = await GeminiService().parseDeliveryList(text);
+      final userOrigin = await _getUserLocation();
+      final parsed = await GeminiService().parseDeliveryList(
+        text,
+        now: DateTime.now(),
+        userLocation: userOrigin,
+      );
       if (parsed.isEmpty) throw Exception('Nenhum endereço encontrado no texto.');
 
-      final optimized = await RouteService().optimizeRoute(parsed);
+      final result = await RouteService().optimizeRoute(parsed, userOrigin: userOrigin);
 
       setState(() {
         _stops
           ..clear()
-          ..addAll(optimized);
+          ..addAll(result.stops)
+          ..addAll(result.infeasible); // inviáveis aparecem no final, em vermelho
         _isListMode = false;
         _isOptimized = true;
         _listController.clear();
       });
 
-      _showSnack('IA otimizou ${optimized.length} paradas com sucesso!', isError: false);
+      widget.onRouteOptimized?.call(result);
+
+      final msg = result.infeasible.isEmpty
+          ? 'IA otimizou ${result.stops.length} paradas!'
+          : 'IA otimizou ${result.stops.length} paradas · ${result.infeasible.length} atrasada(s) no topo';
+      _showSnack(msg, isError: false);
     } catch (e) {
       _showSnack('Erro: $e');
     } finally {
@@ -80,16 +115,21 @@ class _DeliveryViewState extends State<DeliveryView> {
 
     setState(() => _isLoading = true);
     try {
-      final optimized = await RouteService().optimizeRoute(_stops);
+      final userOrigin = await _getUserLocation();
+      final result = await RouteService().optimizeRoute(_stops, userOrigin: userOrigin);
+
       setState(() {
         _stops
           ..clear()
-          ..addAll(optimized);
+          ..addAll(result.stops)
+          ..addAll(result.infeasible);
         _isOptimized = true;
       });
-      _showSnack('Rota otimizada para ${optimized.length} paradas!', isError: false);
+
+      widget.onRouteOptimized?.call(result);
+      _showSnack('Rota otimizada! Indo para o mapa...', isError: false);
     } catch (e) {
-      _showSnack('Erro ao otimizar rota: $e');
+      _showSnack('Erro ao otimizar: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -286,7 +326,8 @@ class _DeliveryViewState extends State<DeliveryView> {
                     const SizedBox(width: 4),
                     Text(
                       'Otimizada pela IA',
-                      style: TextStyle(fontSize: 11, color: Colors.green[700], fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.green[700], fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -299,10 +340,8 @@ class _DeliveryViewState extends State<DeliveryView> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Center(
-              child: Text(
-                'Nenhuma parada adicionada.',
-                style: TextStyle(color: Colors.grey[500], fontSize: 13),
-              ),
+              child: Text('Nenhuma parada adicionada.',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 13)),
             ),
           )
         else
@@ -364,8 +403,18 @@ class _DeliveryViewState extends State<DeliveryView> {
     );
   }
 
+  Color _priorityColor(Stop stop, ColorScheme colors) {
+    if (!stop.feasible) return Colors.red[700]!;
+    switch (stop.priority) {
+      case 1: return Colors.red[600]!;
+      case 3: return Colors.green[600]!;
+      default: return _isOptimized ? Colors.green : colors.primary;
+    }
+  }
+
   Widget _buildStopItem(int index, ColorScheme colors) {
     final stop = _stops[index];
+    final barColor = _priorityColor(stop, colors);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -379,7 +428,7 @@ class _DeliveryViewState extends State<DeliveryView> {
             width: 4,
             height: 72,
             decoration: BoxDecoration(
-              color: _isOptimized ? Colors.green : colors.primary,
+              color: barColor,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(10),
                 bottomLeft: Radius.circular(10),
@@ -387,19 +436,26 @@ class _DeliveryViewState extends State<DeliveryView> {
             ),
           ),
           const SizedBox(width: 12),
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(6),
+          if (!stop.feasible)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.red[200]!),
+              ),
+              child: Text('Atrasado',
+                  style: TextStyle(fontSize: 10, color: Colors.red[700], fontWeight: FontWeight.w700)),
+            )
+          else
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(6)),
+              alignment: Alignment.center,
+              child: Text('${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
             ),
-            alignment: Alignment.center,
-            child: Text(
-              '${index + 1}',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-            ),
-          ),
           const SizedBox(width: 10),
           Expanded(
             child: Padding(
@@ -407,36 +463,33 @@ class _DeliveryViewState extends State<DeliveryView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    stop.address,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
+                  Text(stop.address,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                   if (stop.complement.isNotEmpty)
-                    Text(
-                      stop.complement,
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                    ),
-                  if (stop.note != null || stop.time != null)
+                    Text(stop.complement,
+                        style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                  if (stop.note != null || stop.time != null) ...[
                     const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      if (stop.note != null)
-                        Flexible(
-                          child: Text(
-                            stop.note!,
-                            style: TextStyle(color: Colors.blue[400], fontSize: 11),
-                            overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        if (stop.note != null)
+                          Flexible(
+                            child: Text(stop.note!,
+                                style: TextStyle(color: Colors.blue[400], fontSize: 11),
+                                overflow: TextOverflow.ellipsis),
                           ),
-                        ),
-                      if (stop.note != null && stop.time != null)
-                        Text('  ·  ', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
-                      if (stop.time != null)
-                        Text(
-                          stop.time!,
-                          style: TextStyle(color: Colors.orange[600], fontSize: 11, fontWeight: FontWeight.w600),
-                        ),
-                    ],
-                  ),
+                        if (stop.note != null && stop.time != null)
+                          Text('  ·  ',
+                              style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                        if (stop.time != null)
+                          Text(stop.time!,
+                              style: TextStyle(
+                                  color: _priorityColor(stop, Theme.of(context).colorScheme),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -451,10 +504,8 @@ class _DeliveryViewState extends State<DeliveryView> {
   }
 
   Widget _fieldLabel(String label) {
-    return Text(
-      label,
-      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey[700]),
-    );
+    return Text(label,
+        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey[700]));
   }
 
   Widget _buildTextField({
@@ -467,21 +518,17 @@ class _DeliveryViewState extends State<DeliveryView> {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-        prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, color: Colors.grey[400], size: 20)
-            : null,
+        prefixIcon:
+            prefixIcon != null ? Icon(prefixIcon, color: Colors.grey[400], size: 20) : null,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
-        ),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey[300]!, width: 1)),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
-        ),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.grey[300]!, width: 1)),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5),
-        ),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );

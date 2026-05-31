@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_2_bim/models/route_result.dart';
 import 'package:mobile_2_bim/views/delivery_view.dart';
 import 'package:mobile_2_bim/views/map_view.dart';
 
@@ -11,8 +12,14 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _currentIndex = 0;
+  RouteResult? _routeResult;
 
-  final List<Widget> _pages = const [DeliveryView(), MapView()];
+  void _onRouteOptimized(RouteResult result) {
+    setState(() {
+      _routeResult = result;
+      _currentIndex = 1;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +42,13 @@ class _AppShellState extends State<AppShell> {
           ],
         ),
       ),
-      body: IndexedStack(index: _currentIndex, children: _pages),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          DeliveryView(onRouteOptimized: _onRouteOptimized),
+          MapView(routeResult: _routeResult),
+        ],
+      ),
       bottomNavigationBar: SafeArea(
         child: Container(
           height: 75,
@@ -105,26 +118,16 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.white : Colors.grey,
-              size: 22,
-            ),
+            Icon(icon, color: isSelected ? Colors.white : Colors.grey, size: 22),
             AnimatedSize(
               duration: const Duration(milliseconds: 200),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.grey,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.grey,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
             ),
           ],
