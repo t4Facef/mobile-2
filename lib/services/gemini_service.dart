@@ -53,6 +53,8 @@ Analise a lista de entregas abaixo considerando esse contexto. Para cada entrega
     Em $dayStr próximo de $timeStr, considere que o trânsito pode ser ${now.weekday >= 5 ? 'intenso (fim de semana)' : 'moderado'}.
 - "feasible": true se ainda é possível entregar no horário, false se o horário já passou ou é claramente impossível de cumprir a partir de $timeStr
 
+Se o texto não contiver nenhuma entrega ou estiver fora do contexto de delivery, retorne apenas: []
+
 Retorne APENAS o array JSON válido, sem texto adicional, sem markdown.''';
 
     final response = await http.post(
