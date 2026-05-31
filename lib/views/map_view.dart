@@ -126,7 +126,7 @@ class _MapViewState extends State<MapView> {
 
     final img = await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
-    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List(), width: 38);
   }
 
   Future<void> _applyRoute(RouteResult result) async {
@@ -175,6 +175,13 @@ class _MapViewState extends State<MapView> {
 
   String _fmt(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  void _goToStop(int index, RouteResult result) {
+    if (index >= result.stopCoordinates.length) return;
+    final pos = result.stopCoordinates[index];
+    _mapController?.animateCamera(CameraUpdate.newLatLngZoom(pos, 17));
+    _mapController?.showMarkerInfoWindow(MarkerId('stop_$index'));
+  }
 
   void _fitBounds(RouteResult result) {
     if (_mapController == null) return;
@@ -281,7 +288,10 @@ class _MapViewState extends State<MapView> {
                 final arrival = stop.estimatedArrival;
                 final isLate = arrival != null && stop.time != null && _isAfterDeadline(arrival, stop.time!);
 
-                return Padding(
+                return InkWell(
+                  onTap: () => _goToStop(i, result),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(children: [
                     Container(
@@ -317,6 +327,7 @@ class _MapViewState extends State<MapView> {
                         ),
                       ),
                   ]),
+                  ),
                 );
               },
             ),
