@@ -98,14 +98,37 @@ class RouteService {
         ? '${userOrigin.latitude},${userOrigin.longitude}'
         : coordOrText(0);
 
-    final destinationStr = userOrigin != null
-        ? '${userOrigin.latitude},${userOrigin.longitude}'
-        : coordOrText(sorted.length - 1);
+    // Rota ABERTA: destino = stop mais longe do entregador (não volta para casa).
+    // Isso evita que o Google otimize para minimizar o retorno, o que gera
+    // ordens contra-intuitivas (passa perto de casa antes de ir longe).
+    final int destIdx;
+    if (userOrigin != null) {
+      int farthest = 0;
+      double maxDist = -1;
+      for (int i = 0; i < sorted.length; i++) {
+        final cs = rawCoords[i];
+        if (cs == null) continue;
+        final parts = cs.split(',');
+        final lat = double.parse(parts[0]);
+        final lng = double.parse(parts[1]);
+        final d = (lat - userOrigin.latitude) * (lat - userOrigin.latitude) +
+                  (lng - userOrigin.longitude) * (lng - userOrigin.longitude);
+        if (d > maxDist) { maxDist = d; farthest = i; }
+      }
+      destIdx = farthest;
+    } else {
+      destIdx = sorted.length - 1;
+    }
 
-    final waypointStops   = userOrigin != null ? sorted : sorted.sublist(1, sorted.length - 1);
-    final waypointIndices = userOrigin != null
-        ? List.generate(sorted.length, (i) => i)
-        : List.generate(sorted.length - 2, (i) => i + 1);
+    final destinationStr = coordOrText(destIdx);
+    final fixedLastStop  = sorted[destIdx];
+
+    // Waypoints = todos exceto destino fixo (e exceto origin quando não há GPS)
+    final waypointEntries = sorted.indexed
+        .where((e) => userOrigin != null ? e.$1 != destIdx : (e.$1 != 0 && e.$1 != destIdx))
+        .toList();
+    final waypointStops   = waypointEntries.map((e) => e.$2).toList();
+    final waypointIndices = waypointEntries.map((e) => e.$1).toList();
 
     var urlStr = '$_directionsUrl'
         '?origin=$originStr'
@@ -129,13 +152,14 @@ class RouteService {
       throw Exception('Rota indisponível: ${data['status']}');
     }
 
-    final route   = data['routes'][0] as Map<String, dynamic>;
-    final order   = (route['waypoint_order'] as List).cast<int>();
+    final route     = data['routes'][0] as Map<String, dynamic>;
+    final order     = (route['waypoint_order'] as List).cast<int>();
     final reordered = order.map((i) => waypointStops[i]).toList();
 
+    // Rota aberta: userOrigin → waypoints otimizados → destino mais longe
     List<Stop> optimizedStops = userOrigin != null
-        ? reordered
-        : [sorted.first, ...reordered, sorted.last];
+        ? [...reordered, fixedLastStop]
+        : [sorted.first, ...reordered, fixedLastStop];
 
     optimizedStops = _enforceUrgentFirst(optimizedStops);
 
@@ -145,8 +169,21 @@ class RouteService {
         .whereType<LatLng>()
         .toList();
 
-    // Polylines detalhadas por step — seguem o asfalto com precisão
     final legs = route['legs'] as List;
+
+    // Tempo estimado de chegada em cada parada (legs[i] = trecho até o stop i)
+    final now = DateTime.now();
+    int cumulativeSecs = 0;
+    optimizedStops = List.generate(optimizedStops.length, (i) {
+      if (i < legs.length) {
+        cumulativeSecs += (legs[i]['duration']['value'] as num).toInt();
+      }
+      return optimizedStops[i].withArrival(
+        now.add(Duration(seconds: cumulativeSecs)),
+      );
+    });
+
+    // Polylines detalhadas por step — rota aberta, todos os legs incluídos
     final polylinePoints = <LatLng>[];
     for (final leg in legs) {
       for (final step in (leg['steps'] as List)) {

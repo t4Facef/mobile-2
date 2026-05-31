@@ -403,6 +403,20 @@ class _DeliveryViewState extends State<DeliveryView> {
     );
   }
 
+  String _fmtTime(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  bool _isLate(Stop stop) {
+    if (stop.estimatedArrival == null || stop.time == null) return false;
+    final parts = stop.time!.split(':');
+    if (parts.length != 2) return false;
+    final deadline = DateTime(
+      stop.estimatedArrival!.year, stop.estimatedArrival!.month, stop.estimatedArrival!.day,
+      int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0,
+    );
+    return stop.estimatedArrival!.isAfter(deadline);
+  }
+
   Color _priorityColor(Stop stop, ColorScheme colors) {
     if (!stop.feasible) return Colors.red[700]!;
     switch (stop.priority) {
@@ -468,7 +482,7 @@ class _DeliveryViewState extends State<DeliveryView> {
                   if (stop.complement.isNotEmpty)
                     Text(stop.complement,
                         style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                  if (stop.note != null || stop.time != null) ...[
+                  if (stop.note != null || stop.time != null || stop.estimatedArrival != null) ...[
                     const SizedBox(height: 2),
                     Row(
                       children: [
@@ -479,14 +493,24 @@ class _DeliveryViewState extends State<DeliveryView> {
                                 overflow: TextOverflow.ellipsis),
                           ),
                         if (stop.note != null && stop.time != null)
-                          Text('  ·  ',
-                              style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                          Text('  ·  ', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
                         if (stop.time != null)
                           Text(stop.time!,
                               style: TextStyle(
                                   color: _priorityColor(stop, Theme.of(context).colorScheme),
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600)),
+                        if (stop.estimatedArrival != null) ...[
+                          Text('  →  ', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                          Text(
+                            '~${_fmtTime(stop.estimatedArrival!)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _isLate(stop) ? Colors.red[700] : Colors.green[600],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

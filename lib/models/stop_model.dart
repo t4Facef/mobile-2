@@ -3,8 +3,9 @@ class Stop {
   final String complement;
   final String? note;
   final String? time;
-  final int? priority;   // 1 = urgente, 2 = normal, 3 = pode esperar
-  final bool feasible;   // false = IA considerou inviável no contexto atual
+  final int? priority;
+  final bool feasible;
+  final DateTime? estimatedArrival; // calculado pelo RouteService após otimização
 
   Stop({
     required this.address,
@@ -13,6 +14,7 @@ class Stop {
     this.time,
     this.priority,
     this.feasible = true,
+    this.estimatedArrival,
   });
 
   factory Stop.fromJson(Map<String, dynamic> json) => Stop(
@@ -22,5 +24,15 @@ class Stop {
         time: json['time'] as String?,
         priority: json['priority'] as int?,
         feasible: json['feasible'] as bool? ?? true,
+      );
+
+  Stop withArrival(DateTime arrival) => Stop(
+        address: address,
+        complement: complement,
+        note: note,
+        time: time,
+        priority: priority,
+        feasible: feasible,
+        estimatedArrival: arrival,
       );
 }
