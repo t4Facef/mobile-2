@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:google_fonts/google_fonts.dart";
 
 class MaterialTheme {
   final TextTheme textTheme;
@@ -225,11 +226,10 @@ class MaterialTheme {
      useMaterial3: true,
      brightness: colorScheme.brightness,
      colorScheme: colorScheme,
-     textTheme: textTheme.apply(
-       bodyColor: colorScheme.onSurface,
-       displayColor: colorScheme.onSurface,
+     textTheme: GoogleFonts.hankenGroteskTextTheme(
+       ThemeData(colorScheme: colorScheme).textTheme,
      ),
-     scaffoldBackgroundColor: colorScheme.background,
+     scaffoldBackgroundColor: colorScheme.surface,
      canvasColor: colorScheme.surface,
   );
 
