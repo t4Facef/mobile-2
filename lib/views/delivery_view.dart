@@ -25,7 +25,7 @@ class _DeliveryViewState extends State<DeliveryView> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _complementController = TextEditingController();
 
-  final List<Stop> _stops = [];
+  List<Stop> _stops = [];
 
   Future<LatLng?> _getUserLocation() async {
     try {
@@ -78,7 +78,7 @@ class _DeliveryViewState extends State<DeliveryView> {
       final result = await RouteService().optimizeRoute(parsed, userOrigin: userOrigin);
 
       setState(() {
-        _stops..clear()..addAll(result.stops)..addAll(result.infeasible);
+        _stops = [...result.stops, ...result.infeasible];
         _isListMode = false;
         _isOptimized = true;
         _listController.clear();
@@ -104,7 +104,7 @@ class _DeliveryViewState extends State<DeliveryView> {
       setState(() => _loadingStep = 2);
       final result = await RouteService().optimizeRoute(_stops, userOrigin: userOrigin);
       setState(() {
-        _stops..clear()..addAll(result.stops)..addAll(result.infeasible);
+        _stops = [...result.stops, ...result.infeasible];
         _isOptimized = true;
       });
       widget.onRouteOptimized?.call(result);
